@@ -1,6 +1,7 @@
 package dev.morphia
 
 import org.asciidoctor.Asciidoctor.Factory
+import org.asciidoctor.jruby.cli.AsciidoctorInvoker
 import org.jsoup.Jsoup
 import java.io.File
 import java.io.FileInputStream
@@ -42,7 +43,9 @@ class OperationAudit {
 
         document += "\n|==="
 
-//        File("target/${file.extension("html")}").writeText(asciidoctor.convert(document, mapOf()))
+        val asciidoctor = Factory.create()
+
+        File("target/${file.extension("html")}").writeText(asciidoctor.convert(document, mapOf()))
         File("target/${file.extension("adoc")}").writeText(document)
 
         return this
