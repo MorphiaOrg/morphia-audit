@@ -8,8 +8,6 @@ import java.net.URL
 import java.util.Properties
 
 
-val asciidoctor = Factory.create()
-
 class OperationAudit {
     fun check(url: String, cssSelector: String, file: File): OperationAudit {
         val operators = Jsoup.parse(URL(url), 30000)
@@ -51,7 +49,6 @@ class OperationAudit {
     }
 
     private fun File.extension(extension: String) = this.nameWithoutExtension + ".$extension"
-
 }
 
 fun main() {
@@ -65,4 +62,3 @@ fun main() {
             File("src/main/resources/aggregation.properties")
         )
 }
-
