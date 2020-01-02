@@ -50,17 +50,11 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
             """.trimIndent()
         for (operator in operators) {
             document += """
+                
             |${operator}
-            |""".trimIndent()
-            methods[operator]?.map { method ->
-                val name = method.getName()
-                val className = method.getOrigin().getQualifiedName()
-                method.removeJavaDoc()
-                method.removeAllAnnotations()
-                method.setBody("")
-                document += ". ${method.toString().substringBefore("{")}\n"
-            }
-            document += "\n"
+            |${methods[operator]?.let { impls(it) } ?: ""}
+            
+            """.trimIndent()
         }
 
         document += "\n|==="
@@ -69,6 +63,18 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
         File("target/${name}.html").writeText(asciidoctor.convert(document, mapOf()))
         File("target/${name}.adoc").writeText(document)
+    }
+
+    private fun impls(list: List<MethodSource<*>>): String {
+        val impls = list
+            .map { method ->
+                method.removeJavaDoc()
+                method.removeAllAnnotations()
+                val signature = method.toString().substringBefore("{").trim()
+                ". ${signature} [_${method.getOrigin().getName()}_]"
+            }
+            .joinToString("\n")
+        return impls
     }
 }
 
@@ -83,8 +89,8 @@ fun main() {
     OperationAudit
         .parse(/*"dev.morphia.aggregation", */"dev.morphia.aggregation.experimental.expressions")
         .audit(
-            "aggregation-expressions", "https://docs.mongodb.com/manual/meta/aggregation-quick-reference",
-            ".xref.mongodb-expression"
+            "aggregation-expressions", "https://docs.mongodb.com/manual/reference/operator/aggregation/index.html",
+            ".xref.mongodb"
         )
 
 //    OperationAudit
