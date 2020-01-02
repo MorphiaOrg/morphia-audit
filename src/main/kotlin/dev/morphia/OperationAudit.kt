@@ -7,9 +7,7 @@ import org.jboss.forge.roaster.model.MethodHolder
 import org.jboss.forge.roaster.model.source.MethodSource
 import org.jsoup.Jsoup
 import java.io.File
-import java.io.FileInputStream
 import java.net.URL
-import java.util.Properties
 
 
 class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
@@ -33,7 +31,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
     }
 
-    fun audit(url: String, cssSelector: String, file: File) {
+    fun audit(name: String, url: String, cssSelector: String) {
         val operators = Jsoup.parse(URL(url), 30000)
             .select(cssSelector)
             .distinctBy { it.text() }
@@ -42,13 +40,14 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
         if (operators.isEmpty()) {
             throw IllegalStateException("No operators found for $url.")
         }
-        var document = """= $url
-
-.${file}
-[cols="e,a"]
-|===
-|Operator Name|Implementation
-"""
+        var document = """
+            = $url
+            
+            .${name}
+            [cols="e,a"]
+            |===
+            |Operator Name|Implementation
+            """.trimIndent()
         for (operator in operators) {
             document += """
             |${operator}
@@ -57,7 +56,9 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
                 val name = method.getName()
                 val className = method.getOrigin().getQualifiedName()
                 method.removeJavaDoc()
-                document += ". ${method}\n"
+                method.removeAllAnnotations()
+                method.setBody("")
+                document += ". ${method.toString().substringBefore("{")}\n"
             }
             document += "\n"
         }
@@ -66,21 +67,28 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
         val asciidoctor = Factory.create()
 
-        File("target/${file.extension("html")}").writeText(asciidoctor.convert(document, mapOf()))
-        File("target/${file.extension("adoc")}").writeText(document)
+        File("target/${name}.html").writeText(asciidoctor.convert(document, mapOf()))
+        File("target/${name}.adoc").writeText(document)
     }
-
-    private fun File.extension(extension: String) = this.nameWithoutExtension + ".$extension"
 }
 
 fun main() {
     OperationAudit
         .parse(/*"dev.morphia.aggregation", */"dev.morphia.aggregation.experimental")
-        .audit("https://docs.mongodb.com/manual/meta/aggregation-quick-reference", ".xref.mongodb-pipeline",
-            File("src/main/resources/aggregation-pipeline.properties"))
+        .audit(
+            "aggregation-pipeline", "https://docs.mongodb.com/manual/meta/aggregation-quick-reference",
+            ".xref.mongodb-pipeline"
+        )
 
+    OperationAudit
+        .parse(/*"dev.morphia.aggregation", */"dev.morphia.aggregation.experimental.expressions")
+        .audit(
+            "aggregation-expressions", "https://docs.mongodb.com/manual/meta/aggregation-quick-reference",
+            ".xref.mongodb-expression"
+        )
+
+//    OperationAudit
+//        .parse(/*"dev.morphia.aggregation", */"dev.morphia.aggregation.experimental.expressions")
 //        .audit("https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query",
-//            File("src/main/resources/query.properties"))
-//        .audit("https://docs.mongodb.com/manual/meta/aggregation-quick-reference", ".xref.mongodb-expression",
-//            File("src/main/resources/aggregation-expressions.properties"))
+//            "query-expressions"))
 }
