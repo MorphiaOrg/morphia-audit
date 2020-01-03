@@ -40,6 +40,10 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
         if (operators.isEmpty()) {
             throw IllegalStateException("No operators found for $url.")
         }
+        val map = operators.map {
+            it to methods[it]?.let { impls(it) }
+        }
+
         var document = """
             = $url
             
@@ -48,14 +52,9 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
             |===
             |Operator Name|Implementation
             """.trimIndent()
-        for (operator in operators) {
-            document += """
-                
-            |${operator}
-            |${methods[operator]?.let { impls(it) } ?: ""}
-            
-            """.trimIndent()
-        }
+
+        document += writeImpls(map.filter { it.second == null }, document)
+        document += writeImpls(map.filter { it.second != null }, document)
 
         document += "\n|==="
 
@@ -63,6 +62,20 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
         File("target/${name}.html").writeText(asciidoctor.convert(document, mapOf()))
         File("target/${name}.adoc").writeText(document)
+    }
+
+    private fun writeImpls(operators: List<Pair<String, String?>>, document: String): String {
+        var document1 = ""
+        for (operator in operators) {
+            document1 += """
+                    
+                |${operator.first}
+                |${operator.second  ?: ""}
+                
+                """.trimIndent()
+
+        }
+        return document1
     }
 
     private fun impls(list: List<MethodSource<*>>): String {
