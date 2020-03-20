@@ -8,11 +8,12 @@ import org.jboss.forge.roaster.model.source.MethodSource
 import org.jsoup.Jsoup
 import java.io.File
 import java.net.URL
+import java.text.NumberFormat
 
 
 class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
     companion object {
-        fun parse(vararg pkgNames: String): OperationAudit {
+        fun parse(vararg pkgNames: String, taglet: String): OperationAudit {
             val file = File(System.getenv("MORPHIA_SRC"), "src/main/java").absoluteFile
             println("Scanning $file for sources")
             val methods = file.walkBottomUp()
@@ -23,19 +24,25 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
                 .map { it.getMethods() }
                 .flatten()
                 .filterIsInstance<MethodSource<*>>()
-                .filter { it.getJavaDoc().tagNames.contains("@mongodb.driver.manual") }
-                .groupBy { it.getJavaDoc().getTags("@mongodb.driver.manual")[0].value.substringAfter(" ") }
+                .filter { it.getJavaDoc().tagNames.contains(taglet) }
+                .groupBy { it.getJavaDoc().getTags(taglet)[0].value.substringAfter(" ") }
 
             return OperationAudit(methods)
         }
 
     }
 
-    fun audit(name: String, url: String, cssSelector: String) {
+    fun audit(
+        name: String,
+        url: String,
+        cssSelector: String,
+        filter: List<String> = listOf()
+    ) {
         val operators = Jsoup.parse(URL(url), 30000)
             .select(cssSelector)
             .distinctBy { it.text() }
             .map { it.text() }
+            .filter { it !in filter }
             .sorted()
         if (operators.isEmpty()) {
             throw IllegalStateException("No operators found for $url.")
@@ -44,17 +51,21 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
             it to methods[it]?.let { impls(it) }
         }
 
+        val remaining = map.filter { it.second == null }
+        val done = map.filter { it.second != null }
+
+        val percent = NumberFormat.getPercentInstance().format(1.0 * done.size / operators.size)
         var document = """
             = $url
             
             .${name}
             [cols="e,a"]
             |===
-            |Operator Name|Implementation
+            |Operator Name ($percent of ${operators.size} complete. ${remaining.size} remain)|Implementation
             """.trimIndent()
 
-        document += writeImpls(map.filter { it.second == null }, document)
-        document += writeImpls(map.filter { it.second != null }, document)
+        document += writeImpls(remaining, document)
+        document += writeImpls(done, document)
 
         document += "\n|==="
 
@@ -93,21 +104,17 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
 fun main() {
     OperationAudit
-        .parse(/*"dev.morphia.aggregation", */"dev.morphia.aggregation.experimental")
-        .audit(
-            "aggregation-pipeline", "https://docs.mongodb.com/manual/meta/aggregation-quick-reference",
-            ".xref.mongodb-pipeline"
-        )
+        .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
+        .audit("query-expressions", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query",
+            listOf())
 
     OperationAudit
-        .parse(/*"dev.morphia.aggregation", */"dev.morphia.aggregation.experimental.expressions")
-        .audit(
-            "aggregation-expressions", "https://docs.mongodb.com/manual/reference/operator/aggregation/index.html",
-            ".xref.mongodb"
-        )
+        .parse("dev.morphia.aggregation.experimental", taglet = "@aggregation.expression")
+        .audit("aggregation-pipeline", "https://docs.mongodb.com/manual/meta/aggregation-quick-reference",
+            ".xref.mongodb-pipeline", listOf("\$listSessions", "\$listLocalSessions"))
 
-//    OperationAudit
-//        .parse(/*"dev.morphia.aggregation", */"dev.morphia.aggregation.experimental.expressions")
-//        .audit("https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query",
-//            "query-expressions"))
+    OperationAudit
+        .parse("dev.morphia.aggregation.experimental.expressions", taglet = "@aggregation.expression")
+        .audit("aggregation-expressions", "https://docs.mongodb.com/manual/reference/operator/aggregation/index.html",
+            ".xref.mongodb", listOf("\$addFields", "\$group", "\$project", "\$set"))
 }
