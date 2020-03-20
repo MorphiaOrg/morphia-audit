@@ -32,12 +32,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
     }
 
-    fun audit(
-        name: String,
-        url: String,
-        cssSelector: String,
-        filter: List<String> = listOf()
-    ) {
+    fun audit(name: String, url: String, cssSelector: String, filter: List<String> = listOf()): Int {
         val operators = Jsoup.parse(URL(url), 30000)
             .select(cssSelector)
             .distinctBy { it.text() }
@@ -73,6 +68,8 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
         File("target/${name}.html").writeText(asciidoctor.convert(document, mapOf()))
         File("target/${name}.adoc").writeText(document)
+
+        return remaining.size
     }
 
     private fun writeImpls(operators: List<Pair<String, String?>>, document: String): String {
@@ -103,18 +100,27 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 }
 
 fun main() {
-    OperationAudit
+    val remainingFilters = OperationAudit
         .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
         .audit("query-expressions", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query",
             listOf())
 
-    OperationAudit
+    val remainingStages = OperationAudit
         .parse("dev.morphia.aggregation.experimental", taglet = "@aggregation.expression")
         .audit("aggregation-pipeline", "https://docs.mongodb.com/manual/meta/aggregation-quick-reference",
             ".xref.mongodb-pipeline", listOf("\$listSessions", "\$listLocalSessions"))
 
-    OperationAudit
+    val remainingExpressions = OperationAudit
         .parse("dev.morphia.aggregation.experimental.expressions", taglet = "@aggregation.expression")
         .audit("aggregation-expressions", "https://docs.mongodb.com/manual/reference/operator/aggregation/index.html",
             ".xref.mongodb", listOf("\$addFields", "\$group", "\$project", "\$set"))
+
+    if(remainingExpressions + remainingFilters + remainingStages > 0) {
+        throw Exception("""
+            |Audit found missing items
+            |    remaining expressions: ${remainingExpressions}
+            |    remaining filters: ${remainingFilters}
+            |    remaining stages: ${remainingStages}
+            """.trimMargin("|"))
+    }
 }
