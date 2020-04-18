@@ -1,6 +1,7 @@
 package dev.morphia
 
 import org.asciidoctor.Asciidoctor.Factory
+import org.eclipse.jgit.api.Git
 import org.jboss.forge.roaster.Roaster
 import org.jboss.forge.roaster.model.JavaType
 import org.jboss.forge.roaster.model.MethodHolder
@@ -14,18 +15,18 @@ import java.text.NumberFormat
 class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
     companion object {
         fun parse(vararg pkgNames: String, taglet: String): OperationAudit {
-            val file = File(System.getenv("MORPHIA_SRC"), "src/main/java").absoluteFile
+            val file = File("target/morphia/morphia", "src/main/java").absoluteFile
             println("Scanning $file for sources")
             val methods = file.walkBottomUp()
                 .filter { it.extension == "java" }
                 .map { Roaster.parse(JavaType::class.java, it) }
                 .filter { it.getPackage() in pkgNames }
                 .filterIsInstance<MethodHolder<*>>()
-                .map { it.getMethods() }
+                .map { it.methods }
                 .flatten()
                 .filterIsInstance<MethodSource<*>>()
-                .filter { it.getJavaDoc().tagNames.contains(taglet) }
-                .groupBy { it.getJavaDoc().getTags(taglet)[0].value.substringAfter(" ") }
+                .filter { it.javaDoc.tagNames.contains(taglet) }
+                .groupBy { it.javaDoc.getTags(taglet)[0].value.substringAfter(" ") }
 
             return OperationAudit(methods)
         }
@@ -43,7 +44,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
             throw IllegalStateException("No operators found for $url.")
         }
         val map = operators.map {
-            it to methods[it]?.let { impls(it) }
+            it to methods[it]?.let { list -> impls(list) }
         }
 
         val remaining = map.filter { it.second == null }
@@ -59,8 +60,8 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
             |Operator Name ($percent of ${operators.size} complete. ${remaining.size} remain)|Implementation
             """.trimIndent()
 
-        document += writeImpls(remaining, document)
-        document += writeImpls(done, document)
+        document += writeImpls(remaining)
+        document += writeImpls(done)
 
         document += "\n|==="
 
@@ -72,7 +73,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
         return remaining.size
     }
 
-    private fun writeImpls(operators: List<Pair<String, String?>>, document: String): String {
+    private fun writeImpls(operators: List<Pair<String, String?>>): String {
         var document1 = ""
         for (operator in operators) {
             document1 += """
@@ -87,19 +88,27 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
     }
 
     private fun impls(list: List<MethodSource<*>>): String {
-        val impls = list
-            .map { method ->
-                method.removeJavaDoc()
-                method.removeAllAnnotations()
-                val signature = method.toString().substringBefore("{").trim()
-                ". ${signature} [_${method.getOrigin().getName()}_]"
-            }
-            .joinToString("\n")
-        return impls
+        return list.joinToString("\n") { method ->
+            method.removeJavaDoc()
+            method.removeAllAnnotations()
+            val signature = method.toString().substringBefore("{").trim()
+            ". ${signature} [_${method.origin.name}_]"
+        }
     }
 }
 
 fun main() {
+    val target = File("target/morphia")
+    if (!target.exists()) {
+        Git.cloneRepository()
+            .setURI("https://github.com/MorphiaOrg/morphia")
+            .setDirectory(target)
+            .setCloneAllBranches(false)
+            .call()
+    } else {
+        Git.open(target).pull()
+    }
+
     val remainingFilters = OperationAudit
         .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
         .audit("query-expressions", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query",
