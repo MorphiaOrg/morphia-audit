@@ -11,7 +11,7 @@ import java.io.File
 import java.net.URL
 import java.text.NumberFormat
 
-private val morphiaGit = File("/tmp/morphia")
+private val morphiaGit = File("/tmp/morphia-audit")
 
 class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
     companion object {
@@ -101,7 +101,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
 fun main() {
     if (!morphiaGit.exists()) {
-        println("Cloning morphia to $morphiaGit")
+        println("Cloning morphia to ${morphiaGit.absolutePath}")
         Git.cloneRepository()
             .setURI("https://github.com/MorphiaOrg/morphia")
             .setDirectory(morphiaGit)
