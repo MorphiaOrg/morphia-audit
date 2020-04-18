@@ -101,6 +101,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
 fun main() {
     if (!morphiaGit.exists()) {
+        println("Cloning morphia to $morphiaGit")
         Git.cloneRepository()
             .setURI("https://github.com/MorphiaOrg/morphia")
             .setDirectory(morphiaGit)
