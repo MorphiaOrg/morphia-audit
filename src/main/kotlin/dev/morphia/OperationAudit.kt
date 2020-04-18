@@ -11,22 +11,23 @@ import java.io.File
 import java.net.URL
 import java.text.NumberFormat
 
+private val morphiaGit = File("/tmp/morphia")
 
 class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
     companion object {
         fun parse(vararg pkgNames: String, taglet: String): OperationAudit {
-            val file = File("target/morphia/morphia", "src/main/java").absoluteFile
+            val file = File(morphiaGit, "morphia/src/main/java").absoluteFile
             println("Scanning $file for sources")
             val methods = file.walkBottomUp()
                 .filter { it.extension == "java" }
                 .map { Roaster.parse(JavaType::class.java, it) }
                 .filter { it.getPackage() in pkgNames }
                 .filterIsInstance<MethodHolder<*>>()
-                .map { it.methods }
+                .map { it.getMethods() }
                 .flatten()
                 .filterIsInstance<MethodSource<*>>()
-                .filter { it.javaDoc.tagNames.contains(taglet) }
-                .groupBy { it.javaDoc.getTags(taglet)[0].value.substringAfter(" ") }
+                .filter { it.getJavaDoc().tagNames.contains(taglet) }
+                .groupBy { it.getJavaDoc().getTags(taglet)[0].value.substringAfter(" ") }
 
             return OperationAudit(methods)
         }
@@ -92,21 +93,21 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
             method.removeJavaDoc()
             method.removeAllAnnotations()
             val signature = method.toString().substringBefore("{").trim()
-            ". ${signature} [_${method.origin.name}_]"
+            ". ${signature} [_${method.getOrigin().getName()}_]"
         }
     }
 }
 
+
 fun main() {
-    val target = File("target/morphia")
-    if (!target.exists()) {
+    if (!morphiaGit.exists()) {
         Git.cloneRepository()
             .setURI("https://github.com/MorphiaOrg/morphia")
-            .setDirectory(target)
+            .setDirectory(morphiaGit)
             .setCloneAllBranches(false)
             .call()
     } else {
-        Git.open(target).pull()
+        Git.open(morphiaGit).pull()
     }
 
     val remainingFilters = OperationAudit
