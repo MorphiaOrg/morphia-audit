@@ -2,6 +2,7 @@ package dev.morphia
 
 import dev.morphia.model.MorphiaClass
 import dev.morphia.model.MorphiaMethod
+import dev.morphia.model.State
 import dev.morphia.model.State.ABSENT
 import dev.morphia.model.State.DEPRECATED
 import dev.morphia.model.State.PRESENT
@@ -35,7 +36,7 @@ class SinceAudit() {
         .bufferedReader()
         .readLines()
         .filterNot { it.startsWith("#") }
-    val reports = mutableMapOf<String, () -> Unit>()
+    val reports = LinkedHashMap<String, () -> Unit>()
 
     fun run() {
         Version.values().forEach { version ->
@@ -66,7 +67,7 @@ class SinceAudit() {
 
         validate()
 
-        if(reports.isNotEmpty()) {
+        if (reports.isNotEmpty()) {
             reports.values.forEach { it() }
             throw IllegalStateException("Violations found")
         }
@@ -76,42 +77,67 @@ class SinceAudit() {
         missingNondeprecatedMethods(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
         newDeprecatedMethods(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
         newDeprecatedClasses(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
-    }
-
-    private fun newDeprecatedMethods(newer: Version, older: Version) {
-        val list = methodHistory.values
-            .filter { m ->
-                m.versions[newer] == DEPRECATED && m.versions[older] == ABSENT
-            }
-            .sortedBy { it.name }
-
-        reportMethods("New deprecated methods in ${newer}", older, newer, list);
-    }
-
-    private fun newDeprecatedClasses(newer: Version, older: Version) {
-        val list = classHistory.values
-            .filter { c ->
-                c.versions[newer] == DEPRECATED && c.versions[older] == ABSENT
-            }
-            .sortedBy { it.name }
-        reportClasses("New deprecated classes in ${newer}", older, newer, list);
+        newMethods(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
+        newClasses(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
     }
 
     private fun missingNondeprecatedMethods(newer: Version, older: Version) {
         val list = methodHistory.values
-            .filter { m ->
-                m.versions[newer] == ABSENT && m.versions[older] == PRESENT
-            }
+            .filter { it.versions[newer] == ABSENT && it.versions[older] == PRESENT }
             .filter { classHistory["${it.pkgName}.${it.className}"]?.versions?.get(older) == PRESENT }
-            .sortedBy { it.name }
+            .sortedBy { it.fullyQualified() }
 
-        reportMethods("Methods missing in ${newer} that weren't deprecated in ${older}".format(newer, older),
-            older, newer, list
+        val filtered = list
+            .filter { it.returnType() !=  "Lcom/mongodb/WriteResult;" }  // outdated return type
+            .filter { !it.name.startsWith("merge(Ljava/lang/Object;") }  // issue 959
+            .filter { !it.name.startsWith("save(Ljava/lang/Iterable;") }  // return type changed from Iterable<Key> to List<T>
+            .filter { !it.name.startsWith("save(Ljava/lang/Object;") }  // return type changed from Key to T
+            .filter { !it.name.startsWith("update(Ldev/morphia/query/Query;Ldev/morphia/query/UpdateOperations;") }  // outdated return type
+            .filter { !it.name.startsWith("update(Ldev/morphia/query/Query;Ldev/morphia/query/UpdateOperations;") }  // outdated return type
+            .filter { it.fullyQualified() != "dev.morphia.DeleteOptions#copy()Ldev/morphia/DeleteOptions;" }  // internal method
+            .filter { it.fullyQualified() != "dev.morphia.DeleteOptions#getCollation()Lcom/mongodb/client/model/Collation;" }  // no getters
+            .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#get") }  // no getters
+            .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#is") }  // no getters
+
+        reportMethods(
+            "Methods missing in ${newer} that weren't deprecated in ${older}".format(newer, older),
+            older, newer, filtered
         )
     }
 
-    private fun reportMethods(title: String, older: Version, newer: Version, list: List<MorphiaMethod>) {
+    private fun newDeprecatedMethods(newer: Version, older: Version) {
+        val list = newMethods(newer, older, DEPRECATED, ABSENT)
+        reportMethods("New deprecated methods in ${newer}", older, newer, list);
+    }
 
+    private fun newDeprecatedClasses(newer: Version, older: Version) {
+        val list = newClasses(newer, older, DEPRECATED, ABSENT)
+        reportClasses("New deprecated classes in ${newer}", older, newer, list);
+    }
+
+    private fun newClasses(newer: Version, older: Version) {
+        val list = newClasses(newer, older, PRESENT, ABSENT)
+        reportClasses("New classes in ${newer}", older, newer, list);
+    }
+
+    private fun newMethods(newer: Version, older: Version) {
+        val list = newMethods(newer, older, PRESENT, ABSENT)
+        reportMethods("New methods in ${newer}", older, newer, list);
+    }
+
+    private fun newMethods(newer: Version, older: Version, newState: State, oldState: State): List<MorphiaMethod> {
+        return methodHistory.values
+            .filter { it.versions[newer] == newState && it.versions[older] == oldState }
+            .sortedBy { it.fullyQualified() }
+    }
+
+    private fun newClasses(newer: Version, older: Version, newState: State, oldState: State): List<MorphiaClass> {
+        return classHistory.values
+            .filter { it.versions[newer] == newState && it.versions[older] == oldState }
+            .sortedBy { it.fqcn() }
+    }
+
+    private fun reportMethods(title: String, older: Version, newer: Version, list: List<MorphiaMethod>) {
         if (list.isNotEmpty()) reports[title] = {
             println("${title}: ${list.size}")
             val versions = "%-10s %-10s"
@@ -205,3 +231,8 @@ fun Int.accDecode(): List<String>? {
     }
     return decode
 }
+
+fun MorphiaMethod.returnType(): String {
+    return name.substringAfterLast(")")
+}
+

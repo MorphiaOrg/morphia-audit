@@ -10,6 +10,7 @@ import org.jsoup.Jsoup
 import java.io.File
 import java.net.URL
 import java.text.NumberFormat
+import kotlin.math.acos
 
 private val morphiaGit = File("/tmp/morphia-audit")
 
@@ -71,6 +72,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
         File("target/${name}.html").writeText(asciidoctor.convert(document, mapOf()))
         File("target/${name}.adoc").writeText(document)
 
+        asciidoctor.shutdown()
         return remaining.size
     }
 
@@ -100,16 +102,16 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
 
 fun main() {
-    if (!morphiaGit.exists()) {
-        println("Cloning morphia to ${morphiaGit.absolutePath}")
+    val git = if (!morphiaGit.exists()) {
         Git.cloneRepository()
             .setURI("https://github.com/MorphiaOrg/morphia")
             .setDirectory(morphiaGit)
             .setCloneAllBranches(false)
             .call()
     } else {
-        Git.open(morphiaGit).pull()
+        Git.open(morphiaGit).apply { pull() }
     }
+    git.close()
 
     val remainingFilters = OperationAudit
         .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")

@@ -30,6 +30,10 @@ class MorphiaMethod(val pkgName: String, val className: String, val name: String
     override fun toString(): String {
         return "MorphiaMethod(name='${pkgName}.${className}#${name}', versions=$versions)"
     }
+
+    fun fullyQualified(): String {
+        return "${pkgName}.${className}#${name}"
+    }
 }
 
 enum class Version {
