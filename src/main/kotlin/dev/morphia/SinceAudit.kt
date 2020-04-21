@@ -193,6 +193,7 @@ class SinceAudit() {
 
 fun URL.download(jar: File): JarFile {
     if (!jar.exists()) {
+        jar.parentFile.mkdirs()
         FileOutputStream(jar).write(readBytes())
     }
     return JarFile(jar)
