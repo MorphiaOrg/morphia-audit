@@ -19,6 +19,9 @@ import org.objectweb.asm.tree.ClassNode
 import org.objectweb.asm.tree.MethodNode
 import java.io.File
 import java.io.FileOutputStream
+import java.io.FileWriter
+import java.io.PrintWriter
+import java.io.Writer
 import java.net.URL
 import java.util.ArrayList
 import java.util.LinkedHashMap
@@ -36,7 +39,7 @@ class SinceAudit() {
         .bufferedReader()
         .readLines()
         .filterNot { it.startsWith("#") }
-    val reports = LinkedHashMap<String, () -> Unit>()
+    val reports = LinkedHashMap<String, (PrintWriter) -> Unit>()
 
     fun run() {
         Version.values().forEach { version ->
@@ -68,8 +71,14 @@ class SinceAudit() {
         validate()
 
         if (reports.isNotEmpty()) {
-            reports.values.forEach { it() }
-            throw IllegalStateException("Violations found")
+            val writer = PrintWriter(FileWriter("target/violations.txt"))
+            try {
+                reports.values.forEach { it(writer) }
+                throw IllegalStateException("Violations found")
+            } finally {
+                writer.flush()
+                writer.close()
+            }
         }
     }
 
@@ -98,6 +107,8 @@ class SinceAudit() {
             .filter { it.fullyQualified() != "dev.morphia.DeleteOptions#getCollation()Lcom/mongodb/client/model/Collation;" }  // no getters
             .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#get") }  // no getters
             .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#is") }  // no getters
+            .filter { it.fullyQualified() != "dev.morphia.InsertOptions#copy()Ldev/morphia/InsertOptions;" }  // internal method
+            .filter { it.fullyQualified() != "dev.morphia.UpdateOptions#copy()Ldev/morphia/UpdateOptions;" }  // internal method
 
         reportMethods(
             "Methods missing in ${newer} that weren't deprecated in ${older}".format(newer, older),
@@ -138,28 +149,33 @@ class SinceAudit() {
     }
 
     private fun reportMethods(title: String, older: Version, newer: Version, list: List<MorphiaMethod>) {
-        if (list.isNotEmpty()) reports[title] = {
-            println("${title}: ${list.size}")
+        if (list.isNotEmpty()) reports[title] = { writer ->
+            write(writer, "${title}: ${list.size}")
             val versions = "%-10s %-10s"
-            println(versions.format("older", "newer"))
+            write(writer, versions.format("older", "newer"))
             list.forEach {
                 val states = versions.format(it.versions[older], it.versions[newer])
-                println("$states ${it.pkgName}.${it.className}#${it.name}")
+                write(writer, "$states ${it.pkgName}.${it.className}#${it.name}")
             }
         }
     }
 
     private fun reportClasses(title: String, older: Version, newer: Version, list: List<MorphiaClass>) {
-        if (list.isNotEmpty()) reports[title] = {
-            println("${title}: ${list.size}")
+        if (list.isNotEmpty()) reports[title] = { writer ->
+            write(writer, "${title}: ${list.size}")
             val versions = "%-10s %-10s"
+            write(writer, versions.format("older", "newer"))
             list.forEach {
                 val states = versions.format(it.versions[older], it.versions[newer])
-                println("$states ${it.fqcn()}")
+                write(writer, "$states ${it.fqcn()}")
             }
         }
     }
 
+    private fun write(writer: PrintWriter, line: String) {
+        println(line)
+        writer.println(line)
+    }
     private fun record(classNode: ClassNode): MorphiaClass {
         return classHistory.computeIfAbsent("${classNode.packageName()}.${classNode.className()}") { _ ->
             MorphiaClass(classNode.packageName(), classNode.className())
