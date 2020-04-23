@@ -6,7 +6,6 @@ import java.net.URL
 import java.util.jar.JarFile
 
 class MorphiaClass(val pkgName: String, val name: String) {
-    var deprecated = false
     var versions: MutableMap<Version, State> = Version.values().map { it to State.ABSENT }
         .toMap().toMutableMap()
 
