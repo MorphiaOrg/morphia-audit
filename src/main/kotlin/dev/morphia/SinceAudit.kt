@@ -89,6 +89,7 @@ class SinceAudit() {
 
     private fun validate() {
         reportMissingNondeprecatedMethods(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
+        reportDeprecatedMethodsStillInNew(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
         reportNewDeprecatedMethods(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
         reportNewDeprecatedClasses(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
         reportNewMethods(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
@@ -153,6 +154,15 @@ class SinceAudit() {
         )
     }
 
+    private fun reportDeprecatedMethodsStillInNew(newer: Version, older: Version) {
+        val list = methodHistory.values
+            .filter { it.versions[newer] != ABSENT && it.versions[older] == DEPRECATED }
+            .sortedBy { it.fullyQualified() }
+        reportMethods(
+            "Deprecated methods in ${older} still in ${newer}", older, newer, list,
+            false
+        );
+    }
     private fun reportNewDeprecatedMethods(newer: Version, older: Version) {
         reportMethods(
             "New deprecated methods in ${newer}", older, newer, newMethods(newer, older, DEPRECATED, ABSENT),

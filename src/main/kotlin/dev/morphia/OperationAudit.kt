@@ -16,13 +16,12 @@ private val morphiaGit = File("/tmp/morphia-audit")
 
 class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
     companion object {
-        fun parse(vararg pkgNames: String, taglet: String): OperationAudit {
-            val file = File(morphiaGit, "morphia/src/main/java").absoluteFile
+        fun parse(pkgName: String, taglet: String): OperationAudit {
+            val file = File(morphiaGit, "morphia/src/main/java/${pkgName.replace(".", "/")}").absoluteFile
             println("Scanning $file for sources")
             val methods = file.walkBottomUp()
                 .filter { it.extension == "java" }
                 .map { Roaster.parse(JavaType::class.java, it) }
-                .filter { it.getPackage() in pkgNames }
                 .filterIsInstance<MethodHolder<*>>()
                 .map { it.getMethods() }
                 .flatten()
@@ -115,8 +114,11 @@ fun main() {
 
     val remainingFilters = OperationAudit
         .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
-        .audit("query-expressions", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query",
-            listOf())
+        .audit("query-expressions", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query")
+
+    val remainingUpdates = OperationAudit
+        .parse("dev.morphia.query.experimental.updates", taglet = "@update.operator")
+        .audit("update-operators", "https://docs.mongodb.com/manual/reference/operator/update/", ".xref.mongodb-update")
 
     val remainingStages = OperationAudit
         .parse("dev.morphia.aggregation.experimental", taglet = "@aggregation.expression")
@@ -128,11 +130,12 @@ fun main() {
         .audit("aggregation-expressions", "https://docs.mongodb.com/manual/reference/operator/aggregation/index.html",
             ".xref.mongodb", listOf("\$addFields", "\$group", "\$project", "\$set"))
 
-    if(remainingExpressions + remainingFilters + remainingStages > 0) {
+    if(remainingExpressions + remainingFilters + remainingUpdates + remainingStages > 0) {
         throw Exception("""
             |Audit found missing items
             |    remaining expressions: ${remainingExpressions}
             |    remaining filters: ${remainingFilters}
+            |    remaining updates: ${remainingUpdates}
             |    remaining stages: ${remainingStages}
             """.trimMargin("|"))
     }
