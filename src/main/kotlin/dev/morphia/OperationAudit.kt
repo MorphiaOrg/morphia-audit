@@ -10,7 +10,6 @@ import org.jsoup.Jsoup
 import java.io.File
 import java.net.URL
 import java.text.NumberFormat
-import kotlin.math.acos
 
 private val morphiaGit = File("/tmp/morphia-audit")
 
@@ -18,7 +17,10 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
     companion object {
         fun parse(pkgName: String, taglet: String): OperationAudit {
             val file = File(morphiaGit, "morphia/src/main/java/${pkgName.replace(".", "/")}").absoluteFile
-            println("Scanning $file for sources")
+            if(!file.exists()) {
+                throw IllegalArgumentException("$file does not exist.")
+            }
+            println("Scanning $file for ${taglet}")
             val methods = file.walkBottomUp()
                 .filter { it.extension == "java" }
                 .map { Roaster.parse(JavaType::class.java, it) }
@@ -108,17 +110,19 @@ fun main() {
             .setCloneAllBranches(false)
             .call()
     } else {
-        Git.open(morphiaGit).apply { pull() }
+        Git.open(morphiaGit).apply {
+            pull().call()
+        }
     }
     git.close()
-
-    val remainingFilters = OperationAudit
-        .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
-        .audit("query-expressions", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query")
 
     val remainingUpdates = OperationAudit
         .parse("dev.morphia.query.experimental.updates", taglet = "@update.operator")
         .audit("update-operators", "https://docs.mongodb.com/manual/reference/operator/update/", ".xref.mongodb-update")
+
+    val remainingFilters = OperationAudit
+        .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
+        .audit("query-expressions", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query")
 
     val remainingStages = OperationAudit
         .parse("dev.morphia.aggregation.experimental", taglet = "@aggregation.expression")
