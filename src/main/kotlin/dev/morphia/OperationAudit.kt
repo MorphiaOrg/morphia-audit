@@ -118,7 +118,8 @@ fun main() {
 
     val remainingUpdates = OperationAudit
         .parse("dev.morphia.query.experimental.updates", taglet = "@update.operator")
-        .audit("update-operators", "https://docs.mongodb.com/manual/reference/operator/update/", ".xref.mongodb-update")
+        .audit("update-operators", "https://docs.mongodb.com/manual/reference/operator/update/", ".xref.mongodb-update",
+        listOf("$", "$[]", "$[<identifier>]", "\$position", "\$slice", "\$sort"))
 
     val remainingFilters = OperationAudit
         .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
