@@ -32,6 +32,11 @@ fun main() {
 }
 
 class SinceAudit() {
+    companion object {
+        val newer = Version.v2_0_0_SNAPSHOT
+        val older = Version.v1_6_0_SNAPSHOT
+    }
+
     val classHistory = ConcurrentHashMap<String, MorphiaClass>()
     val methodHistory = ConcurrentHashMap<String, MorphiaMethod>()
     val classes = javaClass.getResourceAsStream("/audit-classes.txt")
@@ -50,7 +55,7 @@ class SinceAudit() {
                                 ClassReader(it.getInputStream(entry)).accept(node, SKIP_CODE)
                             }
 
-                            if (classNode.className() in classes) {
+                            if (classNode.className() in classes || true) {
                                 val morphiaClass = classHistory.computeIfAbsent(classNode.fqcn()) { _ ->
                                     MorphiaClass(classNode.packageName(), classNode.className())
                                 }
@@ -88,15 +93,15 @@ class SinceAudit() {
     }
 
     private fun validate() {
-        reportMissingNondeprecatedMethods(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
-        reportDeprecatedMethodsStillInNew(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
-        reportNewDeprecatedMethods(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
-        reportNewDeprecatedClasses(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
-        reportNewMethods(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
-        reportNewClasses(Version.v2_0_0_SNAPSHOT, Version.v1_6_0_SNAPSHOT)
+        reportMissingNondeprecatedMethods()
+        reportDeprecatedMethodsStillInNew()
+        reportNewDeprecatedMethods()
+        reportNewDeprecatedClasses()
+//        reportNewMethods()
+//        reportNewClasses()
     }
 
-    private fun reportMissingNondeprecatedMethods(newer: Version, older: Version) {
+    private fun reportMissingNondeprecatedMethods() {
         val list = methodHistory.values
             .filter { it.versions[newer] == ABSENT && it.versions[older] == PRESENT }
             .filter { classHistory["${it.pkgName}.${it.className}"]?.versions?.get(older) == PRESENT }
@@ -111,10 +116,19 @@ class SinceAudit() {
             .filter { !it.name.startsWith("update(Ldev/morphia/query/Query;Ldev/morphia/query/UpdateOperations;") }  // outdated return type
             .filter { it.fullyQualified() != "dev.morphia.DeleteOptions#copy()Ldev/morphia/DeleteOptions;" }  // internal method
             .filter { it.fullyQualified() != "dev.morphia.DeleteOptions#getCollation()Lcom/mongodb/client/model/Collation;" }  // no getters
-            .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#get") }  // no getters
-            .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#is") }  // no getters
             .filter { it.fullyQualified() != "dev.morphia.InsertOptions#copy()Ldev/morphia/InsertOptions;" }  // internal method
             .filter { it.fullyQualified() != "dev.morphia.UpdateOptions#copy()Ldev/morphia/UpdateOptions;" }  // internal method
+            .filter { !it.fullyQualified().startsWith("dev.morphia.converters") }  // converters were removed
+            .filter { !it.fullyQualified().contains(".internal") }  // duh
+            .filter { !it.fullyQualified().startsWith("relocated") }  // removed
+            .filter { !it.fullyQualified().startsWith("dev.morphia.logging") }  // logging were removed
+            .filter { !it.fullyQualified().startsWith("dev.morphia.mapping.lazy") }  // internal, removed
+            .filter { !it.fullyQualified().startsWith("dev.morphia.query.validation") }  // internal, removed
+            .filter { !it.fullyQualified().startsWith("dev.morphia.IndexBuilder") }  // internal, removed
+            .filter { !it.fullyQualified().startsWith("dev.morphia.mapping.EphemeralMappedField") }  // internal, removed
+            .filter { !it.fullyQualified().startsWith("dev.morphia.utils") }  // internal, removed
+            .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#get") }  // no getters
+            .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#is") }  // no getters
             .filter { movedToParent(it.fullyQualified()) }
             .filter { dbObjectMigration(it.fullyQualified()) }
 
@@ -154,41 +168,41 @@ class SinceAudit() {
         )
     }
 
-    private fun reportDeprecatedMethodsStillInNew(newer: Version, older: Version) {
+    private fun reportDeprecatedMethodsStillInNew() {
         val list = methodHistory.values
             .filter { it.versions[newer] != ABSENT && it.versions[older] == DEPRECATED }
             .sortedBy { it.fullyQualified() }
         reportMethods(
             "Deprecated methods in ${older} still in ${newer}", older, newer, list,
             false
-        );
+        )
     }
-    private fun reportNewDeprecatedMethods(newer: Version, older: Version) {
+    private fun reportNewDeprecatedMethods() {
         reportMethods(
             "New deprecated methods in ${newer}", older, newer, newMethods(newer, older, DEPRECATED, ABSENT),
             false
-        );
+        )
     }
 
-    private fun reportNewDeprecatedClasses(newer: Version, older: Version) {
+    private fun reportNewDeprecatedClasses() {
         reportClasses(
             "New deprecated classes in ${newer}", older, newer, newClasses(newer, older, DEPRECATED, ABSENT),
             false
-        );
+        )
     }
 
-    private fun reportNewClasses(newer: Version, older: Version) {
+    private fun reportNewClasses() {
         reportClasses(
             "New classes in ${newer}", older, newer, newClasses(newer, older, PRESENT, ABSENT),
             false
-        );
+        )
     }
 
-    private fun reportNewMethods(newer: Version, older: Version) {
+    private fun reportNewMethods() {
         reportMethods(
             "New methods in ${newer}", older, newer, newMethods(newer, older, PRESENT, ABSENT),
             false
-        );
+        )
     }
 
     private fun newMethods(newer: Version, older: Version, newState: State, oldState: State): List<MorphiaMethod> {
