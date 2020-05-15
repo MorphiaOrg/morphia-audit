@@ -64,9 +64,10 @@ class SinceAudit() {
 
                                 classNode.methods.forEach { m ->
                                     if (m.access.isNotPrivate() && m.access.isNotSynthetic()) {
+                                        val morphiaMethod = MorphiaMethod(morphiaClass.pkgName, morphiaClass.name, m.descriptor())
                                         val method =
-                                            methodHistory.computeIfAbsent("${morphiaClass.fqcn()}#${m.descriptor()}") { _ ->
-                                                MorphiaMethod(morphiaClass.pkgName, morphiaClass.name, m.descriptor())
+                                            methodHistory.computeIfAbsent(morphiaMethod.fullyQualified()) { _ ->
+                                                morphiaMethod
                                             }
                                         method.versions[version] = if (m.access.isDeprecated()) DEPRECATED else PRESENT
                                     }
@@ -119,16 +120,22 @@ class SinceAudit() {
             .filter { it.fullyQualified() != "dev.morphia.InsertOptions#copy()Ldev/morphia/InsertOptions;" }  // internal method
             .filter { it.fullyQualified() != "dev.morphia.UpdateOptions#copy()Ldev/morphia/UpdateOptions;" }  // internal method
             .filter { !it.fullyQualified().startsWith("dev.morphia.converters") }  // converters were removed
+            .filter { !it.fullyQualified().contains("Converter") }  // converters were removed
             .filter { !it.fullyQualified().contains(".internal") }  // duh
+            .filter { !it.fullyQualified().contains("EntityCache") }  // removed
             .filter { !it.fullyQualified().startsWith("relocated") }  // removed
             .filter { !it.fullyQualified().startsWith("dev.morphia.logging") }  // logging were removed
             .filter { !it.fullyQualified().startsWith("dev.morphia.mapping.lazy") }  // internal, removed
             .filter { !it.fullyQualified().startsWith("dev.morphia.query.validation") }  // internal, removed
             .filter { !it.fullyQualified().startsWith("dev.morphia.IndexBuilder") }  // internal, removed
+            .filter { !it.fullyQualified().startsWith("dev.morphia.IndexedBuilder") }  // internal, removed
+            .filter { !it.fullyQualified().startsWith("dev.morphia.MapreduceResults") }  // internal, removed
             .filter { !it.fullyQualified().startsWith("dev.morphia.mapping.EphemeralMappedField") }  // internal, removed
             .filter { !it.fullyQualified().startsWith("dev.morphia.utils") }  // internal, removed
             .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#get") }  // no getters
             .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#is") }  // no getters
+            .filter { !it.fullyQualified().startsWith("dev.morphia.AbstractEntityInterceptor#") }  // moved to interface
+            .filter { !it.fullyQualified().startsWith("dev.morphia.query.QueryImpl#") }  // moved to interface
             .filter { movedToParent(it.fullyQualified()) }
             .filter { dbObjectMigration(it.fullyQualified()) }
 

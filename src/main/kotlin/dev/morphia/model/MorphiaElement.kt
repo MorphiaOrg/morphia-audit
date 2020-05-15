@@ -19,7 +19,13 @@ class MorphiaClass(val pkgName: String, val name: String) {
 
 }
 
-class MorphiaMethod(val pkgName: String, val className: String, val name: String) {
+class MorphiaMethod(val pkgName: String, val className: String, name: String) {
+    val name: String
+
+    init {
+        this.name = name.replace("Lcom/mongodb/DBObject;", "Lorg/bson/Document;")
+    }
+
     var versions: MutableMap<Version, State> = Version.values()
         .map { it to State.ABSENT }
         .toMap()
