@@ -64,7 +64,8 @@ class SinceAudit() {
 
                                 classNode.methods.forEach { m ->
                                     if (m.access.isNotPrivate() && m.access.isNotSynthetic()) {
-                                        val morphiaMethod = MorphiaMethod(morphiaClass.pkgName, morphiaClass.name, m.descriptor())
+                                        val morphiaMethod =
+                                            MorphiaMethod(morphiaClass.pkgName, morphiaClass.name, m.descriptor())
                                         val method =
                                             methodHistory.computeIfAbsent(morphiaMethod.fullyQualified()) { _ ->
                                                 morphiaMethod
@@ -96,8 +97,8 @@ class SinceAudit() {
     private fun validate() {
         reportMissingNondeprecatedMethods()
         reportDeprecatedMethodsStillInNew()
-        reportNewDeprecatedMethods()
-        reportNewDeprecatedClasses()
+//        reportNewDeprecatedMethods()
+//        reportNewDeprecatedClasses()
 //        reportNewMethods()
 //        reportNewClasses()
     }
@@ -108,52 +109,112 @@ class SinceAudit() {
             .filter { classHistory["${it.pkgName}.${it.className}"]?.versions?.get(older) == PRESENT }
             .sortedBy { it.fullyQualified() }
 
-        val filtered = list
-            .filter { it.returnType() != "Lcom/mongodb/WriteResult;" }  // outdated return type
             .filter { !it.name.startsWith("merge(Ljava/lang/Object;") }  // issue 959
             .filter { !it.name.startsWith("save(Ljava/lang/Iterable;") }  // return type changed from Iterable<Key> to List<T>
             .filter { !it.name.startsWith("save(Ljava/lang/Object;") }  // return type changed from Key to T
-            .filter { !it.name.startsWith("update(Ldev/morphia/query/Query;Ldev/morphia/query/UpdateOperations;") }  // outdated return type
-            .filter { !it.name.startsWith("update(Ldev/morphia/query/Query;Ldev/morphia/query/UpdateOperations;") }  // outdated return type
-            .filter { it.fullyQualified() != "dev.morphia.DeleteOptions#copy()Ldev/morphia/DeleteOptions;" }  // internal method
-            .filter { it.fullyQualified() != "dev.morphia.DeleteOptions#getCollation()Lcom/mongodb/client/model/Collation;" }  // no getters
-            .filter { it.fullyQualified() != "dev.morphia.InsertOptions#copy()Ldev/morphia/InsertOptions;" }  // internal method
-            .filter { it.fullyQualified() != "dev.morphia.UpdateOptions#copy()Ldev/morphia/UpdateOptions;" }  // internal method
-            .filter { !it.fullyQualified().startsWith("dev.morphia.converters") }  // converters were removed
-            .filter { !it.fullyQualified().contains("Converter") }  // converters were removed
-            .filter { !it.fullyQualified().contains(".internal") }  // duh
-            .filter { !it.fullyQualified().contains("EntityCache") }  // removed
-            .filter { !it.fullyQualified().startsWith("relocated") }  // removed
-            .filter { !it.fullyQualified().startsWith("dev.morphia.logging") }  // logging were removed
-            .filter { !it.fullyQualified().startsWith("dev.morphia.mapping.lazy") }  // internal, removed
-            .filter { !it.fullyQualified().startsWith("dev.morphia.query.validation") }  // internal, removed
-            .filter { !it.fullyQualified().startsWith("dev.morphia.IndexBuilder") }  // internal, removed
-            .filter { !it.fullyQualified().startsWith("dev.morphia.IndexedBuilder") }  // internal, removed
-            .filter { !it.fullyQualified().startsWith("dev.morphia.MapreduceResults") }  // internal, removed
-            .filter { !it.fullyQualified().startsWith("dev.morphia.mapping.EphemeralMappedField") }  // internal, removed
-            .filter { !it.fullyQualified().startsWith("dev.morphia.utils") }  // internal, removed
-            .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#get") }  // no getters
-            .filter { !it.fullyQualified().startsWith("dev.morphia.FindAndModifyOptions#is") }  // no getters
             .filter { !it.fullyQualified().startsWith("dev.morphia.AbstractEntityInterceptor#") }  // moved to interface
             .filter { !it.fullyQualified().startsWith("dev.morphia.query.QueryImpl#") }  // moved to interface
+            .filter { noGetters(it.fullyQualified()) }
+            .filter { removedFunctionality(it.fullyQualified()) }
+            .filter { internalMethod(it.fullyQualified()) }
             .filter { movedToParent(it.fullyQualified()) }
-            .filter { dbObjectMigration(it.fullyQualified()) }
 
         reportMethods(
             "Methods missing in ${newer} that weren't deprecated in ${older}".format(newer, older),
-            older, newer, filtered
+            older, newer, list
         )
     }
 
-    private fun dbObjectMigration(name: String): Boolean {
+    private fun noGetters(name: String): Boolean {
         return name !in listOf(
-            "dev.morphia.query.FindOptions#getHint()Lcom/mongodb/DBObject;",
-            "dev.morphia.query.FindOptions#getMax()Lcom/mongodb/DBObject;",
-            "dev.morphia.query.FindOptions#getMin()Lcom/mongodb/DBObject;",
-            "dev.morphia.query.FindOptions#getSort()Lcom/mongodb/DBObject;",
-            "dev.morphia.UpdateOptions#isUpsert()Z"
-        )
+            "dev.morphia.query.BucketAutoOptions#getGranurality()Ldev/morphia/query/BucketAutoOptions\$Granularity;"
+        ) && !name.startsWith("dev.morphia.FindAndModifyOptions#get")
+                && !name.startsWith("dev.morphia.FindAndModifyOptions#is")
+                && !name.startsWith("dev.morphia.DeleteOptions#getCollation()Lcom/mongodb/client/model/Collation;")
+                && !name.startsWith("dev.morphia.mapping.MapperOptions#get")
+                && !name.startsWith("dev.morphia.mapping.MapperOptions#is")
     }
+
+    private fun removedFunctionality(name: String): Boolean {
+        return name !in listOf(
+            "dev.morphia.mapping.MapperOptions\$Builder#datastoreProvider(Ldev/morphia/mapping/lazy/DatastoreProvider;)Ldev/morphia/mapping/MapperOptions\$Builder;",
+            "dev.morphia.mapping.MapperOptions\$Builder#defaultMapper(Ldev/morphia/mapping/CustomMapper;)Ldev/morphia/mapping/MapperOptions\$Builder;",
+            "dev.morphia.mapping.MapperOptions\$Builder#embeddedMapper(Ldev/morphia/mapping/CustomMapper;)Ldev/morphia/mapping/MapperOptions\$Builder;",
+            "dev.morphia.mapping.MapperOptions\$Builder#enableCaching(Z)Ldev/morphia/mapping/MapperOptions\$Builder;",
+            "dev.morphia.mapping.MapperOptions\$Builder#objectFactory(Ldev/morphia/ObjectFactory;)Ldev/morphia/mapping/MapperOptions\$Builder;",
+            "dev.morphia.mapping.MapperOptions\$Builder#referenceMapper(Ldev/morphia/mapping/CustomMapper;)Ldev/morphia/mapping/MapperOptions\$Builder;",
+            "dev.morphia.mapping.MapperOptions\$Builder#valueMapper(Ldev/morphia/mapping/CustomMapper;)Ldev/morphia/mapping/MapperOptions\$Builder;",
+            "dev.morphia.mapping.Mapper$1#putEntity(Ldev/morphia/Key;Ljava/lang/Object;)V",
+            "dev.morphia.mapping.Mapper$1#putProxy(Ldev/morphia/Key;Ljava/lang/Object;)V",
+            "dev.morphia.query.UpdateOpsImpl#isIsolated()Z",
+            "dev.morphia.query.UpdateOpsImpl#isolated()Ldev/morphia/query/UpdateOperations;",
+            "dev.morphia.query.AbstractQueryFactory#createQuery(Ldev/morphia/Datastore;)Ldev/morphia/query/Query;",
+            "dev.morphia.query.AbstractQueryFactory#createQuery(Ldev/morphia/Datastore;Lcom/mongodb/DBCollection;Ljava/lang/Class;)Ldev/morphia/query/Query;",
+            "dev.morphia.query.DefaultQueryFactory#createQuery(Ldev/morphia/Datastore;Lcom/mongodb/DBCollection;Ljava/lang/Class;Lorg/bson/Document;)Ldev/morphia/query/Query;",
+            "dev.morphia.query.QueryFactory#createQuery(Ldev/morphia/Datastore;Lcom/mongodb/DBCollection;Ljava/lang/Class;)Ldev/morphia/query/Query;",
+            "dev.morphia.query.QueryFactory#createQuery(Ldev/morphia/Datastore;Lcom/mongodb/DBCollection;Ljava/lang/Class;Lorg/bson/Document;)Ldev/morphia/query/Query;"
+        ) && !name.startsWith("dev.morphia.converters")
+                && !name.contains("Converter")
+                && !name.contains("EntityCache")
+                && !name.startsWith("relocated")
+                && !name.startsWith("dev.morphia.Morphia")
+                && !name.startsWith("dev.morphia.mapping.DateStorage")
+                && !name.startsWith("dev.morphia.mapping.DefaultCreator")
+                && !name.startsWith("dev.morphia.mapping.MapperOptions#setCachingEnabled(Z)Ldev/morphia/mapping/MapperOptions;")
+                && !name.startsWith("dev.morphia.mapping.MapperOptions#setDisableEmbeddedIndexes(Z)V")
+                && !name.startsWith("dev.morphia.mapping.ReferenceMapper\$")
+                && !name.startsWith("dev.morphia.mapping.EmbeddedMapper\$")
+                && !name.startsWith("dev.morphia.geo.GeoJson")
+                && !name.startsWith("dev.morphia.mapping.Serializer")
+                && !name.startsWith("dev.morphia.query.Shape#")
+                && !name.startsWith("dev.morphia.query.Shape$")
+                && !name.startsWith("dev.morphia.query.UpdateResults#")
+
+    }
+
+    private fun internalMethod(name: String): Boolean {
+        return name !in listOf(
+            "dev.morphia.DeleteOptions#copy()Ldev/morphia/DeleteOptions;",
+            "dev.morphia.InsertOptions#copy()Ldev/morphia/InsertOptions;",
+            "dev.morphia.UpdateOptions#copy()Ldev/morphia/UpdateOptions;",
+            "dev.morphia.Morphia#fromDBObject(Ldev/morphia/Datastore;Ljava/lang/Class;Lorg/bson/Document;)Ljava/lang/Object;",
+            "dev.morphia.Key#<init>(Ljava/lang/Class;Ljava/lang/String;[B)V",
+            "dev.morphia.aggregation.Accumulator#toDBObject()Lorg/bson/Document;",
+            "dev.morphia.aggregation.AggregationElement#toDBObject()Lorg/bson/Document;",
+            "dev.morphia.aggregation.AggregationElement#toDBObject()Lorg/bson/Document;",
+            "dev.morphia.aggregation.AggregationPipelineImpl#<init>(Ldev/morphia/DatastoreImpl;Lcom/mongodb/DBCollection;Ljava/lang/Class;)V",
+            "dev.morphia.query.FieldCriteria#getQuery()Ldev/morphia/query/QueryImpl;",
+            "dev.morphia.query.FieldCriteria#toDBObject()Lorg/bson/Document;",
+            "dev.morphia.query.Geo2dCriteria#toDBObject()Lorg/bson/Document;",
+            "dev.morphia.query.Geo2dSphereCriteria#toDBObject()Lorg/bson/Document;",
+            "dev.morphia.query.BucketAutoOptions#toDBObject()Lorg/bson/Document;",
+            "dev.morphia.query.Criteria#toDBObject()Lorg/bson/Document;",
+            "dev.morphia.query.UpdateOperator#fromString(Ljava/lang/String;)Ldev/morphia/query/UpdateOperator;",
+            "dev.morphia.query.UpdateOpsImpl#<init>(Ljava/lang/Class;Ldev/morphia/mapping/Mapper;)V",
+            "dev.morphia.query.UpdateOpsImpl#add(Ldev/morphia/query/UpdateOperator;Ljava/lang/String;Ljava/lang/Object;Z)V",
+            "dev.morphia.query.UpdateOpsImpl#toDBObjList(Ldev/morphia/mapping/MappedField;Ljava/util/List;)Ljava/util/List;"
+        ) && !name.startsWith("dev.morphia.logging")
+                && !name.startsWith("dev.morphia.mapping.lazy")
+                && !name.startsWith("dev.morphia.query.validation")
+                && !name.startsWith("dev.morphia.IndexBuilder")
+                && !name.startsWith("dev.morphia.IndexedBuilder")
+                && !name.startsWith("dev.morphia.MapreduceResults")
+                && !name.startsWith("dev.morphia.mapping.EphemeralMappedField")
+                && !name.startsWith("dev.morphia.IndexOptionsBuilder")
+                && !name.startsWith("dev.morphia.utils")
+                && !name.startsWith("dev.morphia.mapping.experimental.CollectionReference#")
+                && !name.startsWith("dev.morphia.mapping.experimental.MapReference#")
+                && !name.startsWith("dev.morphia.mapping.experimental.SingleReference#")
+                && !name.startsWith("dev.morphia.mapping.validation.classrules")
+                && !name.startsWith("dev.morphia.mapping.validation.fieldrules")
+                && !name.startsWith("dev.morphia.query.AbstractCriteria#")
+                && !name.startsWith("dev.morphia.query.CriteriaContainerImpl#")
+                && !name.startsWith("dev.morphia.query.FieldEndImpl#")
+                && !name.startsWith("dev.morphia.mapping.validation.MappingValidator")
+                && !name.startsWith("dev.morphia.query.UpdateOperator#val")
+                && !name.contains(".internal")
+    }
+
     private fun movedToParent(name: String): Boolean {
         return name !in listOf(
             "dev.morphia.DeleteOptions#getWriteConcern()Lcom/mongodb/WriteConcern;",
@@ -171,7 +232,11 @@ class SinceAudit() {
             "dev.morphia.FindAndModifyOptions#writeConcern(Lcom/mongodb/WriteConcern;)Ldev/morphia/FindAndModifyOptions;",
             "dev.morphia.UpdateOptions#getBypassDocumentValidation()Ljava/lang/Boolean;",
             "dev.morphia.UpdateOptions#getCollation()Lcom/mongodb/client/model/Collation;",
-            "dev.morphia.UpdateOptions#isUpsert()Z"
+            "dev.morphia.UpdateOptions#isUpsert()Z",
+            "dev.morphia.AdvancedDatastore#insert(Ljava/lang/Object;)Ldev/morphia/Key;",
+            "dev.morphia.AdvancedDatastore#insert(Ljava/lang/Object;Ldev/morphia/InsertOptions;)Ldev/morphia/Key;",
+            "dev.morphia.AdvancedDatastore#insert(Ljava/util/List;)Ljava/lang/Iterable;",
+            "dev.morphia.AdvancedDatastore#insert(Ljava/util/List;Ldev/morphia/InsertOptions;)Ljava/lang/Iterable;"
         )
     }
 
@@ -184,6 +249,7 @@ class SinceAudit() {
             false
         )
     }
+
     private fun reportNewDeprecatedMethods() {
         reportMethods(
             "New deprecated methods in ${newer}", older, newer, newMethods(newer, older, DEPRECATED, ABSENT),

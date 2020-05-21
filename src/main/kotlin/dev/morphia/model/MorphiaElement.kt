@@ -23,7 +23,15 @@ class MorphiaMethod(val pkgName: String, val className: String, name: String) {
     val name: String
 
     init {
-        this.name = name.replace("Lcom/mongodb/DBObject;", "Lorg/bson/Document;")
+        this.name = migrateTypes(name)
+    }
+
+    private fun migrateTypes(name: String): String {
+        var updated = name
+        typeMigrations.forEach { (old, new) ->
+            updated = updated.replace(old, new)
+        }
+        return updated
     }
 
     var versions: MutableMap<Version, State> = Version.values()
@@ -74,3 +82,9 @@ enum class State {
     PRESENT,
     DEPRECATED
 }
+
+val typeMigrations = mapOf(
+    "Lcom/mongodb/DBObject;" to "Lorg/bson/Document;",
+    "Lcom/mongodb/WriteResult;" to "Lcom/mongodb/client/result/DeleteResult;",
+    "Ldev/morphia/query/UpdateResults;" to "Lcom/mongodb/client/result/UpdateResult;"
+)
