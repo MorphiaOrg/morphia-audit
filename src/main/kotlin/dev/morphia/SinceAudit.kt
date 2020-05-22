@@ -46,41 +46,14 @@ class SinceAudit() {
     val reports = LinkedHashMap<String, (PrintWriter) -> Boolean>()
 
     fun run() {
-        Version.values().forEach { version ->
-            version.download().also {
-                it.entries().iterator()
-                    .forEach { entry ->
-                        if (entry.name.endsWith("class") && !entry.name.endsWith("module-info.class")) {
-                            val classNode = ClassNode().also { node ->
-                                ClassReader(it.getInputStream(entry)).accept(node, SKIP_CODE)
-                            }
-
-                            if (classNode.className() in classes || true) {
-                                val morphiaClass = classHistory.computeIfAbsent(classNode.fqcn()) { _ ->
-                                    MorphiaClass(classNode.packageName(), classNode.className())
-                                }
-                                morphiaClass.versions[version] =
-                                    if (classNode.access.isDeprecated()) DEPRECATED else PRESENT
-
-                                classNode.methods.forEach { m ->
-                                    if (m.access.isNotPrivate() && m.access.isNotSynthetic()) {
-                                        val morphiaMethod =
-                                            MorphiaMethod(morphiaClass.pkgName, morphiaClass.name, m.descriptor())
-                                        val method =
-                                            methodHistory.computeIfAbsent(morphiaMethod.fullyQualified()) { _ ->
-                                                morphiaMethod
-                                            }
-                                        method.versions[version] = if (m.access.isDeprecated()) DEPRECATED else PRESENT
-                                    }
-                                }
-                            }
-                        }
-                    }
-            }
-        }
+        processApis()
 
         validate()
 
+        report()
+    }
+
+    fun report() {
         if (reports.isNotEmpty()) {
             val writer = PrintWriter(FileWriter("target/violations.txt"))
             try {
@@ -90,6 +63,39 @@ class SinceAudit() {
             } finally {
                 writer.flush()
                 writer.close()
+            }
+        }
+    }
+
+    fun processApis() {
+        Version.values().forEach { version ->
+            version.download().also {
+                it.entries().iterator()
+                    .forEach { entry ->
+                        if (entry.name.endsWith("class") && !entry.name.endsWith("module-info.class")) {
+                            val classNode = ClassNode().also { node ->
+                                ClassReader(it.getInputStream(entry)).accept(node, SKIP_CODE)
+                            }
+
+                            val morphiaClass = classHistory.computeIfAbsent(classNode.fqcn()) { _ ->
+                                MorphiaClass(classNode.packageName(), classNode.className())
+                            }
+                            morphiaClass.versions[version] =
+                                if (classNode.access.isDeprecated()) DEPRECATED else PRESENT
+
+                            classNode.methods.forEach { m ->
+                                if (m.access.isNotPrivate() && m.access.isNotSynthetic()) {
+                                    val morphiaMethod =
+                                        MorphiaMethod(morphiaClass.pkgName, morphiaClass.name, m.descriptor())
+                                    val method =
+                                        methodHistory.computeIfAbsent(morphiaMethod.fullyQualified()) { _ ->
+                                            morphiaMethod
+                                        }
+                                    method.versions[version] = if (m.access.isDeprecated()) DEPRECATED else PRESENT
+                                }
+                            }
+                        }
+                    }
             }
         }
     }
