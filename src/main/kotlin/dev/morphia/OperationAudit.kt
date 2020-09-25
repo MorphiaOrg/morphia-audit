@@ -41,7 +41,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
             .select(cssSelector)
             .distinctBy { it.text() }
             .map { it.text() }
-            .filter { it !in filter }
+            .filter { it !in filter  && it.startsWith('$')}
             .sorted()
         if (operators.isEmpty()) {
             throw IllegalStateException("No operators found for $url.")
@@ -123,7 +123,7 @@ fun main() {
 
     val remainingFilters = OperationAudit
         .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
-        .audit("query-expressions", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query")
+        .audit("query-filters", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query")
 
     val remainingStages = OperationAudit
         .parse("dev.morphia.aggregation.experimental", taglet = "@aggregation.expression")

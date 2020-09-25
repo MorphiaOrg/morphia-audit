@@ -50,9 +50,9 @@ class MorphiaMethod(val pkgName: String, val className: String, name: String) {
 }
 
 enum class Version {
-    v2_0_0_SNAPSHOT {
+    v2_1_0_SNAPSHOT {
         override fun artifactId(): String = "morphia-core"
-        override fun version() = "2.0.0-SNAPSHOT"
+        override fun version() = "2.1.0-SNAPSHOT"
     },
     v1_6_0_SNAPSHOT {
         override fun version() = "1.6.0-SNAPSHOT"

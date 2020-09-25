@@ -33,7 +33,7 @@ fun main() {
 
 class SinceAudit() {
     companion object {
-        val newer = Version.v2_0_0_SNAPSHOT
+        val newer = Version.v2_1_0_SNAPSHOT
         val older = Version.v1_6_0_SNAPSHOT
     }
 
@@ -57,9 +57,13 @@ class SinceAudit() {
         if (reports.isNotEmpty()) {
             val writer = PrintWriter(FileWriter("target/violations.txt"))
             try {
-                var failure = false
-                reports.values.forEach { failure = it(writer) || failure }
-                if (failure) throw IllegalStateException("Violations found")
+                val failures = mutableListOf<String>()
+                reports.forEach {
+                    if (it.value(writer)) {
+                        failures += it.key
+                    }
+                }
+                if (failures.isNotEmpty()) throw IllegalStateException("Violations found: ${failures}")
             } finally {
                 writer.flush()
                 writer.close()
@@ -103,10 +107,10 @@ class SinceAudit() {
     private fun validate() {
         reportMissingNondeprecatedMethods()
         reportDeprecatedMethodsStillInNew()
-//        reportNewDeprecatedMethods()
-//        reportNewDeprecatedClasses()
-//        reportNewMethods()
-//        reportNewClasses()
+        reportNewDeprecatedMethods()
+        reportNewDeprecatedClasses()
+        reportNewMethods()
+        reportNewClasses()
     }
 
     private fun reportMissingNondeprecatedMethods() {
@@ -292,6 +296,7 @@ class SinceAudit() {
 
     private fun newClasses(newer: Version, older: Version, newState: State, oldState: State): List<MorphiaClass> {
         return classHistory.values
+            .filter { !it.name.contains("\$") }
             .filter { it.versions[newer] == newState && it.versions[older] == oldState }
             .sortedBy { it.fqcn() }
     }
