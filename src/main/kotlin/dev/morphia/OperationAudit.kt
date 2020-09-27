@@ -16,7 +16,7 @@ private val morphiaGit = File("/tmp/morphia-audit")
 class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
     companion object {
         fun parse(pkgName: String, taglet: String): OperationAudit {
-            val file = File(morphiaGit, "morphia/src/main/java/${pkgName.replace(".", "/")}").absoluteFile
+            val file = File(morphiaGit, "core/src/main/java/${pkgName.replace(".", "/")}").absoluteFile
             if(!file.exists()) {
                 throw IllegalArgumentException("$file does not exist.")
             }
