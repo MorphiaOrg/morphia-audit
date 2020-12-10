@@ -136,12 +136,14 @@ fun main() {
             ".xref.mongodb", listOf("\$addFields", "\$group", "\$project", "\$set"))
 
     if(remainingExpressions + remainingFilters + remainingUpdates + remainingStages > 0) {
-        throw Exception("""
+        println("""
             |Audit found missing items
             |    remaining expressions: ${remainingExpressions}
             |    remaining filters: ${remainingFilters}
             |    remaining updates: ${remainingUpdates}
             |    remaining stages: ${remainingStages}
             """.trimMargin("|"))
+
+        System.exit(1)
     }
 }
