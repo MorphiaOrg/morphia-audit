@@ -30,7 +30,6 @@ jobs:
           key: \${{ runner.os }}-m2-\${{ hashFiles('**/pom.xml') }}
           restore-keys: \${{ runner.os }}-m2
       - name: Build with Maven
-        continue-on-error: true
         run: mvn -e compile exec:java@operations
       - name: Archive audit results
         uses: actions/upload-artifact@v2
