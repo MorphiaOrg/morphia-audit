@@ -10,6 +10,7 @@ import org.jsoup.Jsoup
 import java.io.File
 import java.net.URL
 import java.text.NumberFormat
+import kotlin.system.exitProcess
 
 private val morphiaGit = File("/tmp/morphia-audit")
 
@@ -20,7 +21,6 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
             if(!file.exists()) {
                 throw IllegalArgumentException("$file does not exist.")
             }
-            println("Scanning $file for ${taglet}")
             val methods = file.walkBottomUp()
                 .filter { it.extension == "java" }
                 .map { Roaster.parse(JavaType::class.java, it) }
@@ -74,6 +74,9 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
         File("target/${name}.adoc").writeText(document)
 
         asciidoctor.shutdown()
+        if (remaining.isNotEmpty()) {
+            println("missing items:  ${name}:  ${remaining.map { pair -> pair.first } }")
+        }
         return remaining.size
     }
 
@@ -135,15 +138,5 @@ fun main() {
         .audit("aggregation-expressions", "https://docs.mongodb.com/manual/reference/operator/aggregation/index.html",
             ".xref.mongodb", listOf("\$addFields", "\$group", "\$project", "\$set"))
 
-    if(remainingExpressions + remainingFilters + remainingUpdates + remainingStages > 0) {
-        println("""
-            |Audit found missing items
-            |    remaining expressions: ${remainingExpressions}
-            |    remaining filters: ${remainingFilters}
-            |    remaining updates: ${remainingUpdates}
-            |    remaining stages: ${remainingStages}
-            """.trimMargin("|"))
-
-        System.exit(1)
-    }
+    exitProcess(remainingExpressions + remainingFilters + remainingUpdates + remainingStages)
 }
