@@ -15,7 +15,7 @@ on:
     - cron:  '0 0 * * *'
 
 jobs:
-  Critter:
+  Audits:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -31,3 +31,13 @@ jobs:
           restore-keys: \${{ runner.os }}-m2
       - name: Build with Maven
         run: mvn -e compile exec:java@operations
+      - name: Archive audit results
+        uses: actions/upload-artifact@v2
+        with:
+          name: audit-report
+          path: target/*.adoc
+      - name: Archive audit results
+        uses: actions/upload-artifact@v2
+        with:
+          name: audit-report
+          path: target/*.html
