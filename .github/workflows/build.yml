@@ -4,6 +4,9 @@
 name: Audits
 
 on:
+  push:
+    branches:
+      - '*'
   workflow_dispatch:
     branches:
       - '*'
