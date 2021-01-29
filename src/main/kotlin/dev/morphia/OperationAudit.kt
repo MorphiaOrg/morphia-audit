@@ -126,7 +126,8 @@ fun main() {
 
     val remainingFilters = OperationAudit
         .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
-        .audit("query-filters", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query")
+        .audit("query-filters", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query",
+            listOf("\$rand"))
 
     val remainingStages = OperationAudit
         .parse("dev.morphia.aggregation.experimental", taglet = "@aggregation.expression")
