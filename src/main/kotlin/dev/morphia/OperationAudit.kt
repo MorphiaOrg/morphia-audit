@@ -25,20 +25,21 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
                 .filter { it.extension == "java" }
                 .map { Roaster.parse(JavaType::class.java, it) }
                 .filterIsInstance<MethodHolder<*>>()
-                .map { it.getMethods() }
+                .map { it.methods }
                 .flatten()
                 .filterIsInstance<MethodSource<*>>()
-                .filter { it.getJavaDoc().tagNames.contains(taglet) }
-                .groupBy { it.getJavaDoc().getTags(taglet)[0].value.substringAfter(" ") }
+                .filter { it.javaDoc.tagNames.contains(taglet) }
+                .groupBy { it.javaDoc.getTags(taglet)[0].value.substringAfter(" ") }
 
             return OperationAudit(methods)
         }
 
     }
 
-    fun audit(name: String, url: String, cssSelector: String, filter: List<String> = listOf()): Int {
-        val operators = Jsoup.parse(URL(url), 30000)
-            .select(cssSelector)
+    fun audit(name: String, url: String, filter: List<String> = listOf()): Int {
+        val doc = Jsoup.parse(URL(url), 30000)
+        val operators = doc
+            .select("code")
             .distinctBy { it.text() }
             .map { it.text() }
             .filter { it !in filter  && it.startsWith('$')}
@@ -99,7 +100,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
             method.removeJavaDoc()
             method.removeAllAnnotations()
             val signature = method.toString().substringBefore("{").trim()
-            ". ${signature} [_${method.getOrigin().getName()}_]"
+            ". ${signature} [_${method.origin.name}_]"
         }
     }
 }
@@ -121,23 +122,23 @@ fun main() {
 
     val remainingUpdates = OperationAudit
         .parse("dev.morphia.query.experimental.updates", taglet = "@update.operator")
-        .audit("update-operators", "https://docs.mongodb.com/manual/reference/operator/update/", ".xref.mongodb-update",
-        listOf("$", "$[]", "$[<identifier>]", "\$position", "\$slice", "\$sort"))
+        .audit("update-operators", "https://docs.mongodb.com/manual/reference/operator/update/",
+            listOf("$", "$[]", "$[<identifier>]", "\$position", "\$slice", "\$sort"))
 
     val remainingFilters = OperationAudit
         .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
-        .audit("query-filters", "https://docs.mongodb.com/manual/reference/operator/query/", ".xref.mongodb-query",
+        .audit("query-filters", "https://docs.mongodb.com/manual/reference/operator/query/",
             listOf("\$rand"))
 
     val remainingStages = OperationAudit
         .parse("dev.morphia.aggregation.experimental", taglet = "@aggregation.expression")
         .audit("aggregation-pipeline", "https://docs.mongodb.com/manual/meta/aggregation-quick-reference",
-            ".xref.mongodb-pipeline", listOf("\$listSessions", "\$listLocalSessions"))
+            listOf("\$listSessions", "\$listLocalSessions"))
 
     val remainingExpressions = OperationAudit
         .parse("dev.morphia.aggregation.experimental.expressions", taglet = "@aggregation.expression")
         .audit("aggregation-expressions", "https://docs.mongodb.com/manual/reference/operator/aggregation/index.html",
-            ".xref.mongodb", listOf("\$addFields", "\$group", "\$project", "\$set"))
+            listOf("\$addFields", "\$group", "\$project", "\$set"))
 
     exitProcess(remainingExpressions + remainingFilters + remainingUpdates + remainingStages)
 }
