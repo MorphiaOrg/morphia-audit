@@ -16,8 +16,8 @@ private val morphiaGit = File("/tmp/morphia-audit")
 
 class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
     companion object {
-        fun parse(pkgName: String, taglet: String): OperationAudit {
-            val file = File(morphiaGit, "core/src/main/java/${pkgName.replace(".", "/")}").absoluteFile
+        fun parse(taglet: String): OperationAudit {
+            val file = File(morphiaGit, "core/src/main/java/").absoluteFile
             if(!file.exists()) {
                 throw IllegalArgumentException("$file does not exist.")
             }
@@ -25,8 +25,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
                 .filter { it.extension == "java" }
                 .map { Roaster.parse(JavaType::class.java, it) }
                 .filterIsInstance<MethodHolder<*>>()
-                .map { it.methods }
-                .flatten()
+                .flatMap { it.methods }
                 .filterIsInstance<MethodSource<*>>()
                 .filter { it.javaDoc.tagNames.contains(taglet) }
                 .groupBy { it.javaDoc.getTags(taglet)[0].value.substringAfter(" ") }
@@ -76,6 +75,7 @@ class OperationAudit(var methods: Map<String, List<MethodSource<*>>>) {
 
         asciidoctor.shutdown()
         if (remaining.isNotEmpty()) {
+            println("source: $url")
             println("missing items:  ${name}:  ${remaining.map { pair -> pair.first } }")
         }
         return remaining.size
@@ -120,25 +120,28 @@ fun main() {
     }
     git.close()
 
-    val remainingUpdates = OperationAudit
-        .parse("dev.morphia.query.experimental.updates", taglet = "@update.operator")
+    var remaining = 0
+
+    remaining += OperationAudit
+        .parse(taglet = "@query.filter")
+        .audit("query-filters", "https://docs.mongodb.com/manual/reference/operator/query/",
+            listOf("$", "\$rand"))
+
+    remaining += OperationAudit
+        .parse(taglet = "@update.operator")
         .audit("update-operators", "https://docs.mongodb.com/manual/reference/operator/update/",
             listOf("$", "$[]", "$[<identifier>]", "\$position", "\$slice", "\$sort"))
 
-    val remainingFilters = OperationAudit
-        .parse("dev.morphia.query.experimental.filters", taglet = "@query.filter")
-        .audit("query-filters", "https://docs.mongodb.com/manual/reference/operator/query/",
-            listOf("\$rand"))
+    remaining += OperationAudit
+        .parse(taglet = "@aggregation.expression")
+        .audit("aggregation-pipeline", "https://docs.mongodb.com/manual/reference/operator/aggregation-pipeline",
+            listOf("$", "\$listSessions", "\$listLocalSessions",
+                "\$search" /* not terribly well doc'd.  atlas only? */))
 
-    val remainingStages = OperationAudit
-        .parse("dev.morphia.aggregation.experimental", taglet = "@aggregation.expression")
-        .audit("aggregation-pipeline", "https://docs.mongodb.com/manual/meta/aggregation-quick-reference",
-            listOf("\$listSessions", "\$listLocalSessions"))
-
-    val remainingExpressions = OperationAudit
-        .parse("dev.morphia.aggregation.experimental.expressions", taglet = "@aggregation.expression")
+    remaining += OperationAudit
+        .parse(taglet = "@aggregation.expression")
         .audit("aggregation-expressions", "https://docs.mongodb.com/manual/reference/operator/aggregation/index.html",
-            listOf("\$addFields", "\$group", "\$project", "\$set"))
+            listOf("$", "\$addFields", "\$group", "\$project", "\$set"))
 
-    exitProcess(remainingExpressions + remainingFilters + remainingUpdates + remainingStages)
+    exitProcess(remaining)
 }
